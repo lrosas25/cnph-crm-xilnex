@@ -1,0 +1,626 @@
+const { validationResult } = require('express-validator');
+const Contact = require('../models/Contact');
+const Customer = require('../models/Customer');
+const asyncHandler = require('../m// @desc    Update contact
+// @route   PUT /api/contacts/:id
+// @access  Private
+const updateContact = asyncHandler(async (req, res, next) => {
+  // Check for validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }ler');
+const xilnexService = require('../services/xilnexService');
+
+// @desc    Get all contacts
+// @route   GET /api/contacts
+// @access  Private
+const getContacts = asyncHandler(async (req, res, next) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const startIndex = (page - 1) * limit;
+
+  // Build query - users can only see their assigned contacts unless they're admin/manager
+  let query = {};
+  
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  } else if (req.query.assignedTo) {
+    query.assignedTo = req.query.assignedTo;
+  }
+
+  // Filter by status if provided
+  if (req.query.status) {
+    query.status = req.query.status;
+  }
+
+  // Filter by company if provided
+  if (req.query.company) {
+    query.company = new RegExp(req.query.company, 'i');
+  }
+
+  // Filter by active status
+  if (req.query.isActive !== undefined) {
+    query.isActive = req.query.isActive === 'true';
+  }
+
+  // Build mongoose query
+  let mongooseQuery = Contact.find(query).populate('assignedTo', 'name email');
+
+  // Sort
+  const sortBy = req.query.sort || '-createdAt';
+  mongooseQuery = mongooseQuery.sort(sortBy);
+
+  // Pagination
+  mongooseQuery = mongooseQuery.skip(startIndex).limit(limit);
+
+  // Execute query
+  const contacts = await mongooseQuery;
+  const total = await Contact.countDocuments(query);
+
+  res.status(200).json({
+    success: true,
+    count: contacts.length,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    },
+    data: contacts
+  });
+});
+
+// @desc    Get single contact
+// @route   GET /api/contacts/:id
+// @access  Private
+const getContact = asyncHandler(async (req, res, next) => {
+  let query = { _id: req.params.id };
+
+  // Users can only access their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  const contact = await Contact.findOne(query).populate('assignedTo', 'name email');
+
+  if (!contact) {
+    return res.status(404).json({
+      success: false,
+      message: 'Contact not found'
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: contact
+  });
+});
+
+// @desc    Create new contact
+// @route   POST /api/contacts
+// @access  Private
+const createContact = asyncHandler(async (req, res, next) => {
+  console.log('\n' + '='.repeat(80));
+  console.log('🚀 CREATE CONTACT ENDPOINT HIT');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Request Method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  console.log('='.repeat(80) + '\n');
+  
+  // Check for validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+
+  // Save customer to MongoDB customers collection
+  console.log('💾 Saving customer to MongoDB customers collection...');
+
+  try {
+    // Create customer data object
+    const customerData = {
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      email: req.body.email,
+      phone: req.body.phone || '',
+      company: req.body.company || '',
+      position: req.body.position || '',
+      status: req.body.status || 'customer',
+      source: req.body.source || 'website',
+      address: req.body.address || {},
+      notes: req.body.notes || '',
+      tags: req.body.tags || [],
+      dealValue: req.body.dealValue || 0,
+      customerType: req.body.customerType || 'individual',
+      xilnexSyncStatus: 'pending', // Ready for future Xilnex sync
+      registrationDate: new Date()
+    };
+
+    console.log('� Customer data to save:', JSON.stringify(customerData, null, 2));
+
+    // Save to MongoDB
+    const customer = await Customer.create(customerData);
+    
+    console.log('✅ Customer saved to MongoDB successfully!');
+    console.log('📋 Customer ID:', customer._id);
+    console.log('👤 Customer Name:', customer.fullName);
+    console.log('📧 Customer Email:', customer.email);
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: 'Customer saved to MongoDB successfully',
+      data: {
+        customerId: customer._id,
+        customer: customer,
+        collection: 'customers',
+        xilnexSyncStatus: 'pending'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error saving customer to MongoDB:', error.message);
+    
+    // Handle duplicate email error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer with this email already exists',
+        error: 'Duplicate email address',
+        field: 'email'
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: validationErrors
+      });
+    }
+
+    // Generic error
+    res.status(500).json({
+      success: false,
+      message: 'Error saving customer to database',
+      error: error.message
+    });
+  }
+});
+
+// @desc    Update contact
+// @route   PUT /api/contacts/:id
+// @access  Private
+const updateContact = asyncHandler(async (req, res, next) => {
+    source: req.body.source || 'website',
+    address: req.body.address || {},
+    notes: req.body.notes || '',
+    tags: req.body.tags || [],
+    dealValue: req.body.dealValue || 0,
+    // Add fullName virtual for Xilnex
+    get fullName() {
+      return `${this.firstName} ${this.lastName}`;
+    }
+  };
+
+  // Send directly to Xilnex
+  try {
+    console.log('� Sending customer directly to Xilnex...');
+    const xilnexResult = await xilnexService.syncContact(tempContact);
+    
+    if (xilnexResult.success && !xilnexResult.skipped) {
+      console.log('✅ Customer sent to Xilnex successfully');
+      
+      // Return success with Xilnex information
+      res.status(201).json({
+        success: true,
+        message: 'Customer sent to Xilnex successfully (MongoDB bypassed)',
+        data: {
+          tempId: tempContact._id,
+          xilnexClientId: xilnexResult.xilnexClientId,
+          xilnexSyncStatus: 'synced',
+          xilnexSyncDate: new Date(),
+          customerData: tempContact,
+          xilnexResponse: xilnexResult.data
+        }
+      });
+    } else if (xilnexResult.skipped) {
+      console.log('⚠️ Xilnex sync skipped:', xilnexResult.reason);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Xilnex sync was skipped: ' + xilnexResult.reason,
+        data: {
+          tempId: tempContact._id,
+          xilnexSyncStatus: 'skipped',
+          reason: xilnexResult.reason,
+          customerData: tempContact
+        }
+      });
+    } else {
+      console.error('❌ Failed to send to Xilnex:', xilnexResult.error);
+      
+      res.status(400).json({
+        success: false,
+        message: 'Failed to send customer to Xilnex',
+        error: xilnexResult.error,
+        data: {
+          tempId: tempContact._id,
+          xilnexSyncStatus: 'failed',
+          xilnexSyncError: xilnexResult.error,
+          customerData: tempContact
+        }
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error during Xilnex sync:', error.message);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error sending customer to Xilnex',
+      error: error.message,
+      data: {
+        tempId: tempContact._id,
+        xilnexSyncStatus: 'failed',
+        xilnexSyncError: error.message,
+        customerData: tempContact
+      }
+    });
+  }
+});
+
+// @desc    Update contact
+// @route   PUT /api/contacts/:id
+// @access  Private
+const updateContact = asyncHandler(async (req, res, next) => {
+  // Check for validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+
+  let query = { _id: req.params.id };
+
+  // Users can only update their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  // Get the current contact to check for status changes
+  const currentContact = await Contact.findOne(query);
+  if (!currentContact) {
+    return res.status(404).json({
+      success: false,
+      message: 'Contact not found'
+    });
+  }
+
+  const contact = await Contact.findOneAndUpdate(query, req.body, {
+    new: true,
+    runValidators: true
+  }).populate('assignedTo', 'name email');
+
+  // Check if status changed to customer or if customer data was updated
+  const shouldSyncWithXilnex = (
+    req.body.status === 'customer' || 
+    (currentContact.status === 'customer' && contact.status === 'customer')
+  );
+
+  if (shouldSyncWithXilnex) {
+    try {
+      console.log('🔄 Syncing updated customer with Xilnex...');
+      const xilnexResult = await xilnexService.syncContact(contact);
+      
+      if (xilnexResult.success && !xilnexResult.skipped) {
+        // Update contact with Xilnex information
+        if (xilnexResult.xilnexClientId && !contact.xilnexClientId) {
+          contact.xilnexClientId = xilnexResult.xilnexClientId;
+        }
+        contact.xilnexSyncStatus = 'synced';
+        contact.xilnexSyncDate = new Date();
+        contact.xilnexSyncError = undefined;
+        await contact.save();
+        
+        console.log('✅ Contact synced with Xilnex successfully');
+      } else if (xilnexResult.skipped) {
+        console.log('⚠️ Xilnex sync skipped:', xilnexResult.reason);
+      } else {
+        // Log error but don't fail the contact update
+        console.error('❌ Failed to sync with Xilnex:', xilnexResult.error);
+        contact.xilnexSyncStatus = 'failed';
+        contact.xilnexSyncError = xilnexResult.error;
+        await contact.save();
+      }
+    } catch (error) {
+      console.error('❌ Error during Xilnex sync:', error.message);
+      contact.xilnexSyncStatus = 'failed';
+      contact.xilnexSyncError = error.message;
+      await contact.save();
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    data: contact
+  });
+});
+
+// @desc    Delete contact
+// @route   DELETE /api/contacts/:id
+// @access  Private
+const deleteContact = asyncHandler(async (req, res, next) => {
+  let query = { _id: req.params.id };
+
+  // Users can only delete their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  const contact = await Contact.findOne(query);
+
+  if (!contact) {
+    return res.status(404).json({
+      success: false,
+      message: 'Contact not found'
+    });
+  }
+
+  // Soft delete - set isActive to false instead of removing
+  contact.isActive = false;
+  await contact.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Contact deactivated successfully'
+  });
+});
+
+// @desc    Search contacts
+// @route   GET /api/contacts/search
+// @access  Private
+const searchContacts = asyncHandler(async (req, res, next) => {
+  const { q } = req.query;
+
+  if (!q) {
+    return res.status(400).json({
+      success: false,
+      message: 'Search query is required'
+    });
+  }
+
+  let query = {
+    $text: { $search: q }
+  };
+
+  // Users can only search their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  const contacts = await Contact.find(query)
+    .populate('assignedTo', 'name email')
+    .limit(20);
+
+  res.status(200).json({
+    success: true,
+    count: contacts.length,
+    data: contacts
+  });
+});
+
+// @desc    Get contacts by status
+// @route   GET /api/contacts/status/:status
+// @access  Private
+const getContactsByStatus = asyncHandler(async (req, res, next) => {
+  let query = { status: req.params.status };
+
+  // Users can only see their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  const contacts = await Contact.find(query)
+    .populate('assignedTo', 'name email')
+    .sort('-updatedAt');
+
+  res.status(200).json({
+    success: true,
+    count: contacts.length,
+    data: contacts
+  });
+});
+
+// @desc    Manually sync contact with Xilnex
+// @route   POST /api/contacts/:id/sync-xilnex
+// @access  Private
+const syncContactWithXilnex = asyncHandler(async (req, res, next) => {
+  let query = { _id: req.params.id };
+
+  // Users can only sync their assigned contacts
+  if (req.user.role === 'user') {
+    query.assignedTo = req.user.id;
+  }
+
+  const contact = await Contact.findOne(query);
+
+  if (!contact) {
+    return res.status(404).json({
+      success: false,
+      message: 'Contact not found'
+    });
+  }
+
+  try {
+    console.log('🔄 Manually syncing contact with Xilnex...');
+    contact.xilnexSyncStatus = 'pending';
+    await contact.save();
+
+    const xilnexResult = await xilnexService.syncContact(contact);
+    
+    if (xilnexResult.success && !xilnexResult.skipped) {
+      // Update contact with Xilnex information
+      if (xilnexResult.xilnexClientId && !contact.xilnexClientId) {
+        contact.xilnexClientId = xilnexResult.xilnexClientId;
+      }
+      contact.xilnexSyncStatus = 'synced';
+      contact.xilnexSyncDate = new Date();
+      contact.xilnexSyncError = undefined;
+      await contact.save();
+      
+      res.status(200).json({
+        success: true,
+        message: 'Contact synced with Xilnex successfully',
+        data: {
+          contact,
+          xilnexResult
+        }
+      });
+    } else if (xilnexResult.skipped) {
+      contact.xilnexSyncStatus = 'not_synced';
+      await contact.save();
+      
+      res.status(200).json({
+        success: true,
+        message: 'Xilnex sync skipped',
+        reason: xilnexResult.reason,
+        data: contact
+      });
+    } else {
+      contact.xilnexSyncStatus = 'failed';
+      contact.xilnexSyncError = xilnexResult.error;
+      await contact.save();
+      
+      res.status(400).json({
+        success: false,
+        message: 'Failed to sync with Xilnex',
+        error: xilnexResult.error,
+        data: contact
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error during manual Xilnex sync:', error.message);
+    contact.xilnexSyncStatus = 'failed';
+    contact.xilnexSyncError = error.message;
+    await contact.save();
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error during Xilnex sync',
+      error: error.message
+    });
+  }
+});
+
+// @desc    Batch sync contacts with Xilnex
+// @route   POST /api/contacts/batch-sync-xilnex
+// @access  Private/Admin
+const batchSyncContactsWithXilnex = asyncHandler(async (req, res, next) => {
+  // Only admin and manager can perform batch sync
+  if (!['admin', 'manager'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin or Manager role required.'
+    });
+  }
+
+  try {
+    // Get all customer contacts that need syncing
+    const contactsToSync = await Contact.find({
+      status: 'customer',
+      $or: [
+        { xilnexSyncStatus: { $in: ['not_synced', 'failed'] } },
+        { xilnexSyncStatus: { $exists: false } }
+      ]
+    });
+
+    if (contactsToSync.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No contacts need syncing',
+        totalContacts: 0,
+        results: []
+      });
+    }
+
+    console.log(`🔄 Starting batch sync of ${contactsToSync.length} contacts...`);
+
+    // Update all contacts to pending status
+    await Contact.updateMany(
+      { _id: { $in: contactsToSync.map(c => c._id) } },
+      { xilnexSyncStatus: 'pending' }
+    );
+
+    const results = await xilnexService.batchSyncContacts(contactsToSync);
+
+    // Update contacts based on sync results
+    for (const result of results) {
+      const contact = await Contact.findById(result.contact);
+      if (contact) {
+        if (result.result.success && !result.result.skipped) {
+          if (result.result.xilnexClientId && !contact.xilnexClientId) {
+            contact.xilnexClientId = result.result.xilnexClientId;
+          }
+          contact.xilnexSyncStatus = 'synced';
+          contact.xilnexSyncDate = new Date();
+          contact.xilnexSyncError = undefined;
+        } else if (result.result.skipped) {
+          contact.xilnexSyncStatus = 'not_synced';
+        } else {
+          contact.xilnexSyncStatus = 'failed';
+          contact.xilnexSyncError = result.result.error;
+        }
+        await contact.save();
+      }
+    }
+
+    const successCount = results.filter(r => r.result.success).length;
+    const failedCount = results.filter(r => !r.result.success).length;
+    const skippedCount = results.filter(r => r.result.skipped).length;
+
+    res.status(200).json({
+      success: true,
+      message: 'Batch sync completed',
+      totalContacts: contactsToSync.length,
+      successCount,
+      failedCount,
+      skippedCount,
+      results
+    });
+
+  } catch (error) {
+    console.error('❌ Error during batch Xilnex sync:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Error during batch sync',
+      error: error.message
+    });
+  }
+});
+
+module.exports = {
+  getContacts,
+  getContact,
+  createContact,
+  updateContact,
+  deleteContact,
+  searchContacts,
+  getContactsByStatus,
+  syncContactWithXilnex,
+  batchSyncContactsWithXilnex
+};
