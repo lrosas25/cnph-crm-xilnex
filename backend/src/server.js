@@ -53,6 +53,10 @@ const outletRoutes = require('./routes/outlets');
 
 const app = express();
 
+// Trust proxy - required when behind IIS or other reverse proxy
+// Trust only the immediate proxy (more secure than 'true')
+app.set('trust proxy', 1);
+
 // Connect to database
 connectDB();
 
@@ -84,25 +88,50 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Custom key generator to handle proxy IPs properly
+  keyGenerator: (req) => {
+    // Get the real IP, fallback to connection remote address
+    const forwardedIps = req.get('X-Forwarded-For');
+    let clientIp = req.ip;
+    
+    if (forwardedIps) {
+      // Take the first IP from the X-Forwarded-For header
+      clientIp = forwardedIps.split(',')[0].trim();
+    }
+    
+    // Remove port if present (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+    clientIp = clientIp.split(':')[0];
+    
+    return clientIp;
+  },
+  // Skip rate limiting for internal/trusted requests
+  skip: (req) => {
+    const ip = req.ip;
+    // Skip rate limiting for localhost and internal network
+    return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.');
+  }
 });
 app.use(limiter);
 
-// CORS configuration - more restrictive for production
+// CORS configuration - handle both direct and proxied requests
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3310' // Development frontend
+      process.env.FRONTEND_URL || 'http://localhost:3310',
+      'http://localhost:3310', // Development frontend
+      'http://192.168.100.19:3310' // Production frontend
     ];
     
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (process.env.NODE_ENV === 'development' && !origin) {
+    // Allow requests with no origin (happens with proxy requests, mobile apps, Postman, etc.)
+    if (!origin) {
       return callback(null, true);
     }
     
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      // Log the rejected origin for debugging
+      console.log(`CORS rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },

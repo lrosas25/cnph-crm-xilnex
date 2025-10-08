@@ -169,11 +169,43 @@ const sendTokenResponse = (user, statusCode, res) => {
     });
 };
 
+// @desc    Forgot password
+// @route   POST /api/auth/forgotpassword
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res, next) => {
+  // This is a placeholder implementation
+  // In a real application, you would:
+  // 1. Find user by email
+  // 2. Generate reset token
+  // 3. Send email with reset link
+  res.status(200).json({
+    success: true,
+    message: 'Password reset functionality not implemented yet'
+  });
+});
+
+// @desc    Reset password
+// @route   PUT /api/auth/resetpassword/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res, next) => {
+  // This is a placeholder implementation
+  // In a real application, you would:
+  // 1. Validate reset token
+  // 2. Update user password
+  // 3. Clear reset token
+  res.status(200).json({
+    success: true,
+    message: 'Password reset functionality not implemented yet'
+  });
+});
+
 module.exports = {
   register,
   login,
   logout,
   getMe,
+  forgotPassword,
+  resetPassword,
   updateDetails,
   updatePassword
 };

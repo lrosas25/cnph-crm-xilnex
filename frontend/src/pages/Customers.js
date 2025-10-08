@@ -10,16 +10,10 @@ import {
   Alert,
   CircularProgress,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  DialogContentText,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
   Business as BusinessIcon,
@@ -31,7 +25,6 @@ function Customers() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, customer: null });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,20 +48,6 @@ function Customers() {
     }
   };
 
-  const handleDeleteClick = (customer) => {
-    setDeleteDialog({ open: true, customer });
-  };
-
-  const handleDeleteConfirm = async () => {
-    try {
-      await customerAPI.delete(deleteDialog.customer._id);
-      setCustomers(customers.filter(c => c._id !== deleteDialog.customer._id));
-      setDeleteDialog({ open: false, customer: null });
-    } catch (err) {
-      setError('Failed to delete customer');
-    }
-  };
-
   const getStatusColor = (status) => {
     switch (status) {
       case 'customer': return 'success';
@@ -89,13 +68,6 @@ function Customers() {
           <Box>
             <IconButton size="small" color="primary">
               <EditIcon />
-            </IconButton>
-            <IconButton 
-              size="small" 
-              color="error" 
-              onClick={() => handleDeleteClick(customer)}
-            >
-              <DeleteIcon />
             </IconButton>
           </Box>
         </Box>
@@ -188,29 +160,6 @@ function Customers() {
           ))}
         </Grid>
       )}
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, customer: null })}
-      >
-        <DialogTitle>Delete Customer</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete {deleteDialog.customer?.fullName || 
-            `${deleteDialog.customer?.firstName} ${deleteDialog.customer?.lastName}`}? 
-            This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, customer: null })}>
-            Cancel
-          </Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

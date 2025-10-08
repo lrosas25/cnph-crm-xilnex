@@ -11,13 +11,7 @@
     "seed": "node seed.js",
     "serve-form": "node serve-form.js",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "service:install": "node service-install.js",
-    "service:uninstall": "node service-uninstall.js",
-    "service:start": "node service-control.js start",
-    "service:stop": "node service-control.js stop",
-    "service:restart": "node service-control.js restart",
-    "service:status": "node service-control.js status"
+    "lint:fix": "eslint src/ --fix"
   },
   "keywords": [
     "crm",

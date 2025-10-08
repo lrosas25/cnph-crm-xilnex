@@ -184,7 +184,7 @@ function AddCustomer() {
   const fetchOutlets = async () => {
     try {
       setOutletsLoading(true);
-      const response = await fetch('http://localhost:5685/api/outlets?status=active');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5685/api'}/outlets?status=active`);
       const result = await response.json();
       
       if (result.success) {

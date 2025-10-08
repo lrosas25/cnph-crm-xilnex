@@ -1,14 +1,10 @@
-const Service = require('node-windows').Service;
-const path = require('path');
+var Service = require('node-windows').Service;
 
 // Create a new service object
-const svc = new Service({
-  name: 'CRM Backend Service',
-  description: 'CRM Application Backend Server',
-  script: path.join(__dirname, 'src', 'server.js'),
-  nodeOptions: [
-    '--max_old_space_size=4096'
-  ],
+var svc = new Service({
+  name: 'CRM-Xilnex',
+  description: 'CRM-Xilnex Service',
+  script: 'C:\\Code\\cnph-crm-xilnex\\backend\\src\\server.js',
   env: [
     {
       name: "NODE_ENV",
@@ -16,58 +12,60 @@ const svc = new Service({
     },
     {
       name: "PORT", 
-      value: "5000"
+      value: "5685"
+    },
+    {
+      name: "MONGO_URI",
+      value: "mongodb://192.168.100.19:27017/crm_database"
+    },
+    {
+      name: "MONGODB_URI",
+      value: "mongodb://192.168.100.19:27017/crm_database"
+    },
+    {
+      name: "JWT_SECRET",
+      value: "your_super_secret_jwt_key_here_change_in_production"
+    },
+    {
+      name: "JWT_EXPIRE",
+      value: "30d"
+    },
+    {
+      name: "JWT_COOKIE_EXPIRE",
+      value: "30"
+    },
+    {
+      name: "FRONTEND_URL",
+      value: "http://192.168.100.19:3310"
+    },
+    {
+      name: "XILNEX_ENABLED",
+      value: "true"
+    },
+    {
+      name: "XILNEX_API_URL",
+      value: "https://api.xilnex.com"
+    },
+    {
+      name: "XILNEX_APPID",
+      value: "BQ12k1mF3YWrbPQreZIpEmYbaLgjYzHG"
+    },
+    {
+      name: "XILNEX_APPTOKEN",
+      value: "v5_WPWlMeoVzCEZXrF5LQW/iuMMYW2EfnY80xvoHWgcz/o="
+    },
+    {
+      name: "XILNEX_AUTH",
+      value: "5"
     }
-  ],
-  workingDirectory: __dirname,
-  allowServiceLogon: true,
-  logOnAs: {
-    domain: 'localhost',
-    account: process.env.SERVICE_USER || 'LocalSystem',
-    password: process.env.SERVICE_PASSWORD || ''
-  }
+  ]
 });
 
 // Listen for the "install" event, which indicates the
 // process is available as a service.
 svc.on('install', function() {
-  console.log('✅ CRM Backend Service installed successfully!');
-  console.log('📋 Service Details:');
-  console.log(`   Name: ${svc.name}`);
-  console.log(`   Description: ${svc.description}`);
-  console.log(`   Script: ${svc.script}`);
-  console.log('');
-  console.log('🚀 Starting the service...');
   svc.start();
 });
 
-svc.on('alreadyinstalled', function() {
-  console.log('ℹ️  Service is already installed.');
-  console.log('🔄 To reinstall, first run: npm run service:uninstall');
-});
-
-svc.on('start', function() {
-  console.log('✅ CRM Backend Service started successfully!');
-  console.log('');
-  console.log('📊 Service Management Commands:');
-  console.log('   Start:     npm run service:start');
-  console.log('   Stop:      npm run service:stop');
-  console.log('   Restart:   npm run service:restart');
-  console.log('   Uninstall: npm run service:uninstall');
-  console.log('');
-  console.log('📝 View logs in Windows Event Viewer or:');
-  console.log('   Application Logs: C:\\ProgramData\\CRM Backend Service\\daemon\\');
-  process.exit(0);
-});
-
-svc.on('error', function(err) {
-  console.error('❌ Service installation failed:', err);
-  process.exit(1);
-});
-
-console.log('🔧 Installing CRM Backend Service...');
-console.log('⚠️  Note: This requires administrator privileges');
-console.log('');
-
-// Install the service
+// Install the script as a service
 svc.install();

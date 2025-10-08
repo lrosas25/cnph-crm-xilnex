@@ -99,7 +99,7 @@ const OutletMaintenance = () => {
       if (filterStatus) params.append('status', filterStatus);
       if (filterType) params.append('type', filterType);
 
-      const response = await fetch(`http://localhost:5685/api/outlets?${params}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5685/api'}/outlets?${params}`);
       const result = await response.json();
 
       if (result.success) {
@@ -207,8 +207,8 @@ const OutletMaintenance = () => {
     try {
       setLoading(true);
       const url = editingOutlet 
-        ? `http://localhost:5685/api/outlets/${editingOutlet._id}`
-        : 'http://localhost:5685/api/outlets';
+        ? `${process.env.REACT_APP_API_URL || 'http://localhost:5685/api'}/outlets/${editingOutlet._id}`
+        : `${process.env.REACT_APP_API_URL || 'http://localhost:5685/api'}/outlets`;
       
       const method = editingOutlet ? 'PUT' : 'POST';
       
@@ -245,7 +245,7 @@ const OutletMaintenance = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5685/api/outlets/${outletId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5685/api'}/outlets/${outletId}`, {
         method: 'DELETE',
       });
 
