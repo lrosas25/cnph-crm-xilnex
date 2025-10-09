@@ -23,6 +23,35 @@ const CustomerSchema = new mongoose.Schema({
       'Please add a valid email'
     ]
   },
+  birthdate: {
+    type: Date,
+    required: [true, 'Please add a birthdate'],
+    validate: {
+      validator: function(value) {
+        // Check if birthdate is not in the future
+        const today = new Date();
+        if (value >= today) {
+          return false;
+        }
+        
+        // Check minimum age (13 years)
+        const age = today.getFullYear() - value.getFullYear();
+        const monthDiff = today.getMonth() - value.getMonth();
+        
+        if (age < 13 || (age === 13 && monthDiff < 0)) {
+          return false;
+        }
+        
+        // Check maximum reasonable age (120 years)
+        if (age > 120) {
+          return false;
+        }
+        
+        return true;
+      },
+      message: 'Please provide a valid birthdate (minimum age 13 years)'
+    }
+  },
   phone: {
     type: String,
     maxlength: [20, 'Phone number cannot be longer than 20 characters']

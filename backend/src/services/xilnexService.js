@@ -90,7 +90,7 @@ class XilnexService {
         email: contact.email,
         type: "",
         registrationCode: "",
-        dob: new Date().toISOString(), // Use today's date
+        dob: contact.birthdate ? new Date(contact.birthdate).toISOString() : new Date().toISOString(),
         firstName: contact.firstName,
         lastName: contact.lastName,
         mobile: contact.phone || "",

@@ -37,6 +37,9 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import {
   Person as PersonIcon,
   Email as EmailIcon,
@@ -56,6 +59,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Lock as LockIcon,
   Storefront as StorefrontIcon,
+  CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { customerAPI } from '../services/api';
@@ -100,6 +104,7 @@ function AddCustomer() {
     firstName: '',
     lastName: '',
     email: '',
+    birthdate: '',
     phone: '',
     company: '',
     position: '',
@@ -136,6 +141,24 @@ function AddCustomer() {
           errors.email = 'Email is required';
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
           errors.email = 'Please enter a valid email address';
+        }
+        break;
+      case 'birthdate':
+        if (!value.trim()) {
+          errors.birthdate = 'Birthdate is required';
+        } else {
+          const birthDate = new Date(value);
+          const today = new Date();
+          const age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          
+          if (birthDate >= today) {
+            errors.birthdate = 'Birthdate cannot be in the future';
+          } else if (age < 13 || (age === 13 && monthDiff < 0)) {
+            errors.birthdate = 'Customer must be at least 13 years old';
+          } else if (age > 120) {
+            errors.birthdate = 'Please enter a valid birthdate';
+          }
         }
         break;
       case 'phone':
@@ -180,6 +203,23 @@ function AddCustomer() {
     }
   };
 
+  const handleDateChange = (date) => {
+    const dateValue = date ? date.toISOString().split('T')[0] : '';
+    
+    // Validate field on change
+    const fieldErrors = validateField('birthdate', dateValue);
+    setFormErrors(prev => ({
+      ...prev,
+      ...fieldErrors,
+      birthdate: fieldErrors.birthdate || undefined
+    }));
+    
+    setFormData(prev => ({
+      ...prev,
+      birthdate: dateValue
+    }));
+  };
+
   // Fetch outlets from API
   const fetchOutlets = async () => {
     try {
@@ -215,7 +255,7 @@ function AddCustomer() {
     
     // Validate all required fields
     const allErrors = {};
-    ['firstName', 'lastName', 'email'].forEach(field => {
+    ['firstName', 'lastName', 'email', 'birthdate'].forEach(field => {
       const fieldErrors = validateField(field, formData[field]);
       Object.assign(allErrors, fieldErrors);
     });
@@ -235,8 +275,31 @@ function AddCustomer() {
       if (response.success) {
         setSuccess(true);
         setTimeout(() => {
-          navigate('/customers');
-        }, 2000);
+          // For public access, show success message and stay on page or redirect to thank you page
+          setFormData({
+            firstName: '',
+            lastName: '',
+            email: '',
+            birthdate: '',
+            phone: '',
+            company: '',
+            position: '',
+            status: 'customer',
+            source: 'website',
+            outlet: outlets.length > 0 ? outlets[0].code : '',
+            notes: '',
+            address: {
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: '',
+            },
+          });
+          setActiveStep(0);
+          setPrivacyAgreed(false);
+          setSuccess(false);
+        }, 3000);
       } else {
         // Handle Xilnex sync errors specifically
         if (response.error && response.error.includes('Xilnex')) {
@@ -281,7 +344,13 @@ function AddCustomer() {
   };
 
   const handleCancel = () => {
-    navigate('/customers');
+    // For public access, redirect to a thank you page or stay on the same page
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // If no history, could redirect to a landing page or show a message
+      window.location.href = '/';
+    }
   };
 
   const getStepContent = (step) => {
@@ -310,7 +379,7 @@ function AddCustomer() {
                 <Box display="flex" alignItems="center" mb={2}>
                   <PrivacyTipIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="h6" color="primary">
-                    Privacy Notice
+                    Privacy Notice and Consent Form
                   </Typography>
                 </Box>
                 
@@ -376,11 +445,27 @@ function AddCustomer() {
                     </List>
                   </AccordionDetails>
                 </Accordion>
+                <Typography variant="subtitle2" fontWeight={600}>
+                    Data Sharing and Storage
+                </Typography>
+
+                <Typography variant="body1" paragraph>
+                  Your information may be shared with <strong>Christy Ng Philippines</strong> and <strong>Christy Ng International</strong> for legitimate business purposes, 
+                  including but not limited to customer relationship management, marketing, and service improvement. 
+                  All shared data will be handled in accordance with applicable data protection laws and company privacy standards to ensure your 
+                  information remains secure and confidential.
+
+                </Typography>
 
                 <Box mt={3} p={2} sx={{ bgcolor: 'info.light', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    Your Rights
+                  </Typography>
+
                   <Typography variant="body2" color="info.contrastText">
-                    <strong>Your Rights:</strong> You have the right to access, update, or delete your personal information at any time. 
-                    You can also opt-out of marketing communications. Contact us at christyngph.ecom@christyng.com.ph for any privacy-related requests.
+                    You have the right to access, update, or delete your personal information at any time. You may also opt out of receiving marketing communications.
+                    For any privacy-related requests or concerns, please contact us at <strong>christyngph.ecom@christyng.com.ph</strong>. <br/>
+                    By providing your information, you acknowledge that you have read and understood this Privacy Notice and consent to the collection, use, and sharing of your data as described above.
                   </Typography>
                 </Box>
               </Paper>
@@ -552,6 +637,47 @@ function AddCustomer() {
                     },
                   }}
                 />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="Birthdate *"
+                    value={formData.birthdate ? new Date(formData.birthdate) : null}
+                    onChange={handleDateChange}
+                    maxDate={new Date()}
+                    defaultCalendarMonth={new Date(2000, 5)} // June 2000
+                    views={['year', 'month', 'day']}
+                    openTo="year"
+                    enableAccessibleFieldDOMStructure={false}
+                    slots={{
+                      textField: TextField
+                    }}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        required: true,
+                        error: !!formErrors.birthdate,
+                        helperText: formErrors.birthdate || "Required for age verification and personalized service",
+                        InputProps: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <CalendarIcon color="action" />
+                            </InputAdornment>
+                          ),
+                        },
+                        variant: "outlined",
+                        sx: {
+                          '& .MuiOutlinedInput-root': {
+                            '&:hover fieldset': {
+                              borderColor: 'primary.main',
+                            },
+                          },
+                        }
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
               </Grid>
             </Grid>
           </Box>
@@ -849,7 +975,7 @@ function AddCustomer() {
             sx={{ mb: 3 }}
             icon={<CheckCircleIcon fontSize="inherit" />}
           >
-            Customer created successfully! Redirecting to customers list...
+            Registration successful! Thank you for joining us. Your information has been saved and we'll be in touch soon.
           </Alert>
         )}
 
