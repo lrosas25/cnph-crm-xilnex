@@ -26,7 +26,7 @@ console.log('=====================================');
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'MONGO_URI',
+  'MONGODB_URI',
   'JWT_SECRET',
   'JWT_EXPIRE',
   'JWT_COOKIE_EXPIRE',
@@ -68,6 +68,7 @@ const userRoutes = require('./routes/users');
 const contactRoutes = require('./routes/contacts');
 const customerRoutes = require('./routes/customers');
 const outletRoutes = require('./routes/outlets');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
@@ -162,7 +163,11 @@ app.use(cors(corsOptions));
 
 // Body parsing middleware - reduced limits for production
 const bodyLimit = process.env.NODE_ENV === 'production' ? '1mb' : '10mb';
-app.use(express.json({ limit: bodyLimit }));
+// Capture raw body for HMAC signature verification on webhook routes
+app.use(express.json({
+  limit: bodyLimit,
+  verify: (req, _res, buf) => { req.rawBody = buf; }
+}));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
 // Compression middleware
@@ -191,6 +196,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/outlets', outletRoutes);
+app.use('/api/webhooks/xilnex', webhookRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

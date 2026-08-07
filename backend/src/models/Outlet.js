@@ -12,7 +12,7 @@ const OutletSchema = new mongoose.Schema({
     required: [true, 'Please add an outlet code'],
     unique: true,
     trim: true,
-    maxlength: [20, 'Outlet code cannot be more than 20 characters']
+    maxlength: [50, 'Outlet code cannot be more than 50 characters']
   },
   description: {
     type: String,
