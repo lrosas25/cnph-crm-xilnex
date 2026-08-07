@@ -3,25 +3,39 @@ const SaleTransaction = require('../models/SaleTransaction');
 const Customer = require('../models/Customer');
 const asyncHandler = require('../middleware/asyncHandler');
 
+const LOG = '[XILNEX WEBHOOK]';
+
 // Xilnex sends header: xilnex-webhook-signature = <raw HMAC-SHA256 hex>
 const verifySignature = (rawBody, signature) => {
   const secret = process.env.XILNEX_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip verification if secret not configured (dev only)
+  if (!secret) {
+    console.warn(`${LOG} XILNEX_WEBHOOK_SECRET not set — skipping signature verification`);
+    return true;
+  }
 
-  if (!signature) return false;
+  if (!signature) {
+    console.warn(`${LOG} Signature header missing (xilnex-webhook-signature)`);
+    return false;
+  }
 
   const expectedHash = crypto
     .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
 
+  console.log(`${LOG} Signature received : ${signature}`);
+  console.log(`${LOG} Signature expected : ${expectedHash}`);
+
   try {
-    return crypto.timingSafeEqual(
+    const match = crypto.timingSafeEqual(
       Buffer.from(signature, 'hex'),
       Buffer.from(expectedHash, 'hex')
     );
+    console.log(`${LOG} Signature match: ${match}`);
+    return match;
   } catch {
-    return false; // Buffers differ in length — invalid signature
+    console.error(`${LOG} Signature comparison failed — likely wrong length or encoding`);
+    return false;
   }
 };
 
@@ -98,20 +112,30 @@ const saleCompletedHealth = asyncHandler(async (req, res) => {
 // @route   POST /api/webhooks/xilnex/sale-completed
 // @access  Public (verified by HMAC signature)
 const receiveSaleCompleted = asyncHandler(async (req, res) => {
+  console.log(`${LOG} ── Incoming request ──────────────────────────`);
+  console.log(`${LOG} Method : ${req.method}`);
+  console.log(`${LOG} IP     : ${req.ip}`);
+  console.log(`${LOG} Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  console.log(`${LOG} Body   : ${JSON.stringify(req.body, null, 2)}`);
+
   const signature = req.headers['xilnex-webhook-signature'];
 
   if (!verifySignature(req.rawBody, signature)) {
+    console.error(`${LOG} ❌ Signature verification failed — returning 401`);
     return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
   }
+  console.log(`${LOG} ✅ Signature OK`);
 
   const payload = req.body;
 
   // Xilnex may batch multiple transactions in one call
   const events = Array.isArray(payload) ? payload : [payload];
+  console.log(`${LOG} Event count: ${events.length}`);
   const results = [];
 
-  for (const event of events) {
+  for (const [i, event] of events.entries()) {
     const eventType = event.event || event.type || event.eventType;
+    console.log(`${LOG} [${i}] eventType: ${eventType ?? '(none)'}`);
 
     // Match Xilnex Event Hub names: "Complete Sales", "Complete Sales v2"
     const isSaleEvent =
@@ -119,13 +143,19 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
       /complete\s+sales/i.test(eventType);
 
     if (!isSaleEvent) {
+      console.warn(`${LOG} [${i}] Skipped — unhandled event type: ${eventType}`);
       results.push({ skipped: true, reason: `Unhandled event type: ${eventType}` });
       continue;
     }
 
     const mapped = mapPayload(event);
+    console.log(`${LOG} [${i}] Mapped transactionId: ${mapped.xilnexTransactionId ?? '(missing)'}`);
+    console.log(`${LOG} [${i}] Mapped grandTotal   : ${mapped.grandTotal}`);
+    console.log(`${LOG} [${i}] Mapped outlet        : ${mapped.outlet}`);
+    console.log(`${LOG} [${i}] Mapped clientId      : ${mapped.xilnexClientId}`);
 
     if (!mapped.xilnexTransactionId) {
+      console.warn(`${LOG} [${i}] Skipped — missing transaction ID. Raw event keys: ${Object.keys(event).join(', ')}`);
       results.push({ skipped: true, reason: 'Missing transaction ID' });
       continue;
     }
@@ -136,6 +166,7 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
       mapped.customerEmail,
       mapped.customerPhone
     );
+    console.log(`${LOG} [${i}] CRM customer match: ${crmCustomer ? crmCustomer._id : 'none'}`);
 
     try {
       const transaction = await SaleTransaction.findOneAndUpdate(
@@ -151,8 +182,10 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
+      console.log(`${LOG} [${i}] ✅ Upserted _id: ${transaction._id}`);
       results.push({ success: true, transactionId: transaction.xilnexTransactionId });
     } catch (err) {
+      console.error(`${LOG} [${i}] ❌ MongoDB upsert error: ${err.message}`);
       // Record the error but still acknowledge so Xilnex doesn't retry indefinitely
       await SaleTransaction.findOneAndUpdate(
         { xilnexTransactionId: mapped.xilnexTransactionId },
@@ -163,12 +196,13 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
           processingError: err.message
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
-      ).catch(() => {});
+      ).catch((e) => console.error(`${LOG} [${i}] ❌ Error-state upsert also failed: ${e.message}`));
 
       results.push({ success: false, error: err.message, transactionId: mapped.xilnexTransactionId });
     }
   }
 
+  console.log(`${LOG} ── Done. Results: ${JSON.stringify(results)} ──`);
   return res.status(200).json({ success: true, processed: results.length, results });
 });
 
