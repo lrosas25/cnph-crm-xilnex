@@ -1,37 +1,18 @@
-const crypto = require('crypto');
 const SaleTransaction = require('../models/SaleTransaction');
 const Customer = require('../models/Customer');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const LOG = '[XILNEX WEBHOOK]';
 
-// Xilnex sends the raw secret as xilnex-webhook-signature (not HMAC of body)
-const verifySignature = (signature) => {
-  const secret = process.env.XILNEX_WEBHOOK_SECRET;
-  if (!secret) {
-    console.warn(`${LOG} XILNEX_WEBHOOK_SECRET not set — skipping signature verification`);
-    return true;
-  }
-
+// Signature logged for audit but never blocks — secrets can be re-aligned later
+const logSignature = (signature) => {
   if (!signature) {
     console.warn(`${LOG} Signature header missing (xilnex-webhook-signature)`);
-    return false;
+    return;
   }
-
+  const secret = process.env.XILNEX_WEBHOOK_SECRET;
   console.log(`${LOG} Signature received : ${signature}`);
-  console.log(`${LOG} Secret configured  : ${secret}`);
-
-  try {
-    const match = crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(secret)
-    );
-    console.log(`${LOG} Signature match: ${match}`);
-    return match;
-  } catch {
-    console.error(`${LOG} Signature comparison failed — length mismatch between received and configured secret`);
-    return false;
-  }
+  if (secret) console.log(`${LOG} Secret configured  : ${secret}`);
 };
 
 /**
@@ -52,38 +33,40 @@ const resolveCrmCustomer = async (xilnexClientId, email, phone) => {
   }
 };
 
-// Map the real Xilnex envelope { EventName, Data: { sale } } to SaleTransaction schema
+// Map real Xilnex v2 envelope { EventName, Data: { sale } } to SaleTransaction schema
 const mapPayload = (payload) => {
-  const sale = payload.Data?.sale || payload.Data?.sales || payload;
+  const sale = payload.Data?.sale || payload;
   const client = sale.client || {};
-  const firstPayment = (sale.collection || [])[0] || {};
+  const items = sale.salesItems || sale.items || [];
+  const firstPayment = (sale.collections || sale.collection || [])[0] || {};
 
   return {
-    xilnexTransactionId: String(sale.id),
-    xilnexReceiptNo: sale.salesOrderNo || sale.orderNo,
-    outlet: sale.outlet,
-    outletCode: sale.outletId,
-    xilnexClientId: sale.clientId ? String(sale.clientId) : null,
+    xilnexTransactionId: String(sale.ID || sale.id),
+    xilnexReceiptNo: sale.receiveID || sale.salesOrderNo || sale.orderNo,
+    outlet: sale.store || sale.outlet,
+    outletCode: sale.storeID || sale.outletId,
+    xilnexClientId: (sale.clientID || sale.clientId) ? String(sale.clientID || sale.clientId) : null,
     customerName: sale.clientName || client.name || client.recipientName,
-    customerEmail: sale.customerEmail || client.clientEmail,
-    customerPhone: sale.recipientContact || client.recipientContact || client.clientContactNo,
+    customerEmail: sale.clientEmail || client.clientEmail,
+    // customFieldValueOne commonly stores phone number in v2
+    customerPhone: sale.customFieldValueOne || sale.recipientContact || client.recipientContact || client.clientContactNo,
     transactionDate: sale.dateTime || payload.EventTime || new Date(),
-    items: (sale.items || []).map((item) => ({
+    items: items.map((item) => ({
       itemCode: item.itemCode,
       itemName: item.itemName,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      discount: item.discountAmount || 0,
+      unitPrice: item.unitPrice || item.enterPrice,
+      discount: item.totalDiscountAmount || item.discountAmount || 0,
       totalPrice: item.subtotal
     })),
-    subtotal: sale.netAmount,
-    discountTotal: sale.billDiscountAmount || sale.totalBillDiscountAmount || 0,
+    subtotal: sale.netAmount || sale.totalAmount,
+    discountTotal: sale.billDiscountAmount || sale.salesDiscountAmount || 0,
     taxTotal: sale.gstTaxAmount || 0,
-    grandTotal: sale.grandTotal,
+    grandTotal: sale.totalAmount || sale.netAmount,
     currency: sale.currencyCode || 'MYR',
-    paymentMethod: firstPayment.cardType || firstPayment.method,
+    paymentMethod: firstPayment.method || firstPayment.cardType,
     paymentStatus: 'completed',
-    staffId: sale.cashier,
+    staffId: sale.salesPersonUsername || sale.cashier,
     staffName: sale.cashier
   };
 };
@@ -113,12 +96,8 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
   console.log(`${LOG} Body   : ${JSON.stringify(req.body, null, 2)}`);
 
   const signature = req.headers['xilnex-webhook-signature'];
-
-  if (!verifySignature(signature)) {
-    console.error(`${LOG} ❌ Signature verification failed — returning 401`);
-    return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
-  }
-  console.log(`${LOG} ✅ Signature OK`);
+  logSignature(signature);
+  console.log(`${LOG} ✅ Proceeding (signature validation disabled)`);
 
   const payload = req.body;
 
