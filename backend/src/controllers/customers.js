@@ -104,6 +104,9 @@ const createCustomer = asyncHandler(async (req, res, next) => {
     });
   }
 
+  console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📅 Birthdate received:', req.body.birthdate);
+
   // First, try to sync with Xilnex BEFORE creating customer in MongoDB
   try {
     // Create a temporary customer object for Xilnex sync (without saving to DB)
@@ -118,10 +121,25 @@ const createCustomer = asyncHandler(async (req, res, next) => {
     // Check if Xilnex sync was successful
     if (!xilnexResult.success && !xilnexResult.skipped) {
       // Xilnex sync failed - do not save customer to MongoDB
+      console.log('❌ Xilnex sync failed, extracting specific error message...');
+      
+      // Extract the specific error message from Xilnex response
+      let specificError = 'Xilnex sync failed';
+      
+      if (xilnexResult.details && xilnexResult.details.status) {
+        specificError = xilnexResult.details.status;
+      } else if (xilnexResult.details && xilnexResult.details.warning) {
+        specificError = xilnexResult.details.warning;
+      } else if (xilnexResult.error) {
+        specificError = xilnexResult.error;
+      }
+      
+      console.log('📝 Specific Xilnex error message:', specificError);
+      
       return res.status(400).json({
         success: false,
-        message: 'Failed to sync with Xilnex. Customer not created.',
-        error: xilnexResult.error || 'Xilnex sync failed',
+        message: `${specificError}. Customer was not saved.`,
+        error: specificError,
         xilnexError: xilnexResult
       });
     }
@@ -130,6 +148,12 @@ const createCustomer = asyncHandler(async (req, res, next) => {
     console.log('✅ Xilnex sync successful/skipped, creating customer in MongoDB...');
     
     const customerData = { ...req.body };
+    
+    // Ensure birthdate is properly formatted as Date object
+    if (customerData.birthdate) {
+      customerData.birthdate = new Date(customerData.birthdate);
+      console.log('📅 Formatted birthdate:', customerData.birthdate);
+    }
     
     // Add Xilnex data if sync was successful
     if (xilnexResult.success && xilnexResult.xilnexClientId) {
@@ -140,9 +164,12 @@ const createCustomer = asyncHandler(async (req, res, next) => {
       customerData.xilnexSyncStatus = 'disabled';
     }
     
+    console.log('💾 Final customer data before save:', JSON.stringify(customerData, null, 2));
+    
     const customer = await Customer.create(customerData);
     
     console.log('✅ Customer successfully created in MongoDB with ID:', customer._id);
+    console.log('📅 Saved birthdate:', customer.birthdate);
     
     res.status(201).json({
       success: true,
@@ -151,11 +178,25 @@ const createCustomer = asyncHandler(async (req, res, next) => {
     });
     
   } catch (error) {
-    // If it's a Xilnex-related error, don't save to MongoDB
+    console.error('❌ Error creating customer:', error);
+    
+    // Check if this is a Xilnex-related error with specific details
+    let errorMessage = error.message;
+    
+    if (error.response && error.response.data) {
+      if (error.response.data.status) {
+        errorMessage = error.response.data.status;
+      } else if (error.response.data.warning) {
+        errorMessage = error.response.data.warning;
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to create customer due to sync error',
-      error: error.message
+      message: errorMessage,
+      error: errorMessage
     });
   }
 });
@@ -183,9 +224,17 @@ const updateCustomer = asyncHandler(async (req, res, next) => {
     });
   }
 
+  const updateData = { ...req.body };
+  
+  // Ensure birthdate is properly formatted as Date object if provided
+  if (updateData.birthdate) {
+    updateData.birthdate = new Date(updateData.birthdate);
+    console.log('📅 Updating birthdate to:', updateData.birthdate);
+  }
+
   const customer = await Customer.findByIdAndUpdate(
     req.params.id,
-    req.body,
+    updateData,
     {
       new: true,
       runValidators: true

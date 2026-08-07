@@ -301,22 +301,13 @@ function AddCustomer() {
           setSuccess(false);
         }, 3000);
       } else {
-        // Handle Xilnex sync errors specifically
-        if (response.error && response.error.includes('Xilnex')) {
-          setError(`Xilnex Integration Error: ${response.error}. Customer was not saved.`);
-        } else {
-          setError(response.message || 'Failed to create customer');
-        }
+        // Use the specific error message from the backend (which already includes Xilnex details)
+        setError(response.message || response.error || 'Failed to create customer');
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to create customer';
-      
-      // Check if it's a Xilnex-related error
-      if (errorMessage.includes('Xilnex') || err.response?.data?.xilnexError) {
-        setError(`Xilnex Integration Error: ${errorMessage}. Customer was not saved. Please check Xilnex configuration and try again.`);
-      } else {
-        setError(errorMessage);
-      }
+      // Use the specific error message from the backend
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Failed to create customer';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

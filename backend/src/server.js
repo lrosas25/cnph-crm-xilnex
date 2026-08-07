@@ -6,6 +6,24 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+// Debug environment variables (especially Xilnex config)
+console.log('🌍 ENVIRONMENT VARIABLES DEBUG:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  PORT:', process.env.PORT);
+console.log('  XILNEX_ENABLED:', process.env.XILNEX_ENABLED);
+console.log('  XILNEX_API_URL:', process.env.XILNEX_API_URL);
+console.log('  XILNEX_APPID exists:', !!process.env.XILNEX_APPID);
+console.log('  XILNEX_APPTOKEN exists:', !!process.env.XILNEX_APPTOKEN);
+console.log('  XILNEX_AUTH exists:', !!process.env.XILNEX_AUTH);
+if (process.env.XILNEX_APPID) {
+  console.log('  XILNEX_APPID preview:', process.env.XILNEX_APPID.substring(0, 8) + '...');
+}
+if (process.env.XILNEX_APPTOKEN) {
+  console.log('  XILNEX_APPTOKEN preview:', process.env.XILNEX_APPTOKEN.substring(0, 16) + '...');
+}
+console.log('  XILNEX_AUTH value:', process.env.XILNEX_AUTH);
+console.log('=====================================');
+
 // Validate required environment variables
 const requiredEnvVars = [
   'MONGO_URI',

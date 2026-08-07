@@ -71,6 +71,17 @@ function Login() {
           setError('Name is required');
           return;
         }
+        
+        // Validate email domain for registration
+        const allowedDomains = ['@roasters.com.ph', '@sbc.com.ph', '@ftsfood.com.ph', '@christyng.com.ph'];
+        const emailDomain = formData.email.toLowerCase();
+        const isValidDomain = allowedDomains.some(domain => emailDomain.endsWith(domain));
+        
+        if (!isValidDomain) {
+          setError('Registration is restricted to company email addresses only. Please use an email ending with @roasters.com.ph, @sbc.com.ph, @ftsfood.com.ph, or @christyng.com.ph');
+          return;
+        }
+        
         if (formData.password !== formData.confirmPassword) {
           setError('Passwords do not match');
           return;
@@ -207,6 +218,7 @@ function Login() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
+                  helperText={isRegisterMode ? "Use your company email (@roasters.com.ph, @sbc.com.ph, @ftsfood.com.ph, or @christyng.com.ph)" : ""}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -335,7 +347,7 @@ function Login() {
             <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
               <Box textAlign="center">
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Need to register as a customer?
+                  Need to register a customer?
                 </Typography>
                 <Button
                   component={Link}

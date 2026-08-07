@@ -8,6 +8,15 @@ class XilnexService {
     this.auth = process.env.XILNEX_AUTH;
     this.enabled = process.env.XILNEX_ENABLED === 'true';
     
+    // Debug logging for configuration
+    console.log('🔧 XILNEX SERVICE CONFIGURATION:');
+    console.log('  API URL:', this.apiUrl);
+    console.log('  Enabled:', this.enabled);
+    console.log('  App ID:', this.appId ? `${this.appId.substring(0, 8)}...` : 'NOT SET');
+    console.log('  Token:', this.token ? `${this.token.substring(0, 16)}...` : 'NOT SET');
+    console.log('  Auth:', this.auth || 'NOT SET');
+    console.log('  Is Configured:', this.isEnabled());
+    
     // Create axios instance with default config
     this.axiosInstance = axios.create({
       baseURL: this.apiUrl,
@@ -20,6 +29,8 @@ class XilnexService {
         'auth': this.auth
       }
     });
+    
+    console.log('📡 Axios instance headers:', this.axiosInstance.defaults.headers);
 
     // Add request interceptor for logging
     this.axiosInstance.interceptors.request.use(
@@ -46,7 +57,14 @@ class XilnexService {
    * Check if Xilnex integration is enabled and configured
    */
   isEnabled() {
-     return this.enabled && this.appId && this.token && this.auth;
+    const result = this.enabled && this.appId && this.token && this.auth;
+    console.log('🔍 XILNEX isEnabled() check:');
+    console.log('  enabled:', this.enabled);
+    console.log('  appId:', !!this.appId, this.appId ? `(${this.appId.substring(0, 8)}...)` : '(missing)');
+    console.log('  token:', !!this.token, this.token ? `(${this.token.substring(0, 16)}...)` : '(missing)');
+    console.log('  auth:', !!this.auth, `(${this.auth})`);
+    console.log('  final result:', result);
+    return result;
   }
 
   /**
@@ -72,9 +90,13 @@ class XilnexService {
    * Transform CRM contact data to Xilnex client format
    */
   async transformContactToXilnexClient(contact) {
-    const outletName = await this.mapOutletToXilnexName(contact.outlet);
+    console.log('🔄 TRANSFORMING CONTACT TO XILNEX CLIENT');
+    console.log('  Input contact:', JSON.stringify(contact, null, 2));
     
-    return {
+    const outletName = await this.mapOutletToXilnexName(contact.outlet);
+    console.log('  Mapped outlet:', contact.outlet, '->', outletName);
+    
+    const clientData = {
       client: {
         buddyReferenceID: 0,
         buddyPoints: 0,
@@ -120,6 +142,9 @@ class XilnexService {
       isRequireGenerateXCard: false,
       isCreditTransferable: false
     };
+    
+    console.log('✅ TRANSFORMED CLIENT DATA:', JSON.stringify(clientData, null, 2));
+    return clientData;
   }
 
   /**
@@ -139,14 +164,24 @@ class XilnexService {
    * Create a new client in Xilnex
    */
   async createClient(contact) {
+    console.log('🆕 XILNEX CREATE CLIENT START');
+    
     if (!this.isEnabled()) {
+      console.error('❌ Xilnex integration is not enabled or configured');
       throw new Error('Xilnex integration is not enabled or configured');
     }
 
     try {
+      console.log('🔄 Transforming contact to Xilnex client format...');
       const clientData = await this.transformContactToXilnexClient(contact);
+      console.log('📤 Sending to Xilnex API:', JSON.stringify(clientData, null, 2));
+      console.log('🌐 Request URL:', `${this.axiosInstance.defaults.baseURL}/logic/v2/clients`);
+      console.log('🔑 Request headers:', this.axiosInstance.defaults.headers);
       
       const response = await this.axiosInstance.post('/logic/v2/clients', clientData);
+      
+      console.log('✅ XILNEX API RESPONSE STATUS:', response.status);
+      console.log('📥 XILNEX API RESPONSE DATA:', JSON.stringify(response.data, null, 2));
 
       return {
         success: true,
@@ -155,9 +190,35 @@ class XilnexService {
       };
 
     } catch (error) {
+      console.error('❌ XILNEX CREATE CLIENT ERROR:');
+      console.error('   Error message:', error.message);
+      console.error('   HTTP Status:', error.response?.status);
+      console.error('   Response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('   Request config:', JSON.stringify({
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers,
+        data: error.config?.data
+      }, null, 2));
+      
+      // Extract specific error message from Xilnex response
+      let specificError = error.message;
+      
+      if (error.response?.data) {
+        if (error.response.data.status) {
+          specificError = error.response.data.status;
+        } else if (error.response.data.warning) {
+          specificError = error.response.data.warning;
+        } else if (error.response.data.message) {
+          specificError = error.response.data.message;
+        }
+      }
+      
+      console.log('📝 Extracted specific error:', specificError);
+      
       return {
         success: false,
-        error: error.response?.data?.message || error.message,
+        error: specificError,
         statusCode: error.response?.status,
         details: error.response?.data
       };
@@ -183,9 +244,22 @@ class XilnexService {
       };
 
     } catch (error) {
+      // Extract specific error message from Xilnex response
+      let specificError = error.message;
+      
+      if (error.response?.data) {
+        if (error.response.data.status) {
+          specificError = error.response.data.status;
+        } else if (error.response.data.warning) {
+          specificError = error.response.data.warning;
+        } else if (error.response.data.message) {
+          specificError = error.response.data.message;
+        }
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.message || error.message,
+        error: specificError,
         statusCode: error.response?.status,
         details: error.response?.data
       };
@@ -246,24 +320,43 @@ class XilnexService {
    * Sync contact with Xilnex (create or update)
    */
   async syncContact(contact) {
+    console.log('🔄 XILNEX SYNC CONTACT START');
+    console.log('  Contact ID:', contact._id);
+    console.log('  Contact Name:', contact.firstName, contact.lastName);
+    console.log('  Contact Email:', contact.email);
+    console.log('  Existing Xilnex ID:', contact.xilnexClientId);
+    
     if (!this.isEnabled()) {
+      console.log('⚠️  Xilnex integration is DISABLED');
+      console.log('  Enabled flag:', this.enabled);
+      console.log('  App ID exists:', !!this.appId);
+      console.log('  Token exists:', !!this.token);
+      console.log('  Auth exists:', !!this.auth);
       return { success: true, skipped: true, reason: 'Integration disabled' };
     }
+
+    console.log('✅ Xilnex integration is ENABLED, proceeding with sync...');
 
     try {
       let result;
 
       if (contact.xilnexClientId) {
+        console.log('📝 Updating existing Xilnex client:', contact.xilnexClientId);
         // Update existing client
         result = await this.updateClient(contact.xilnexClientId, contact);
       } else {
+        console.log('🆕 Creating new Xilnex client');
         // Create new client
         result = await this.createClient(contact);
       }
 
+      console.log('🔄 XILNEX SYNC RESULT:', JSON.stringify(result, null, 2));
       return result;
 
     } catch (error) {
+      console.error('❌ XILNEX SYNC ERROR:', error);
+      console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
       return {
         success: false,
         error: error.message
