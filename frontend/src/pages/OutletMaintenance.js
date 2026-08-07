@@ -598,7 +598,8 @@ const OutletMaintenance = () => {
                           onChange={handleInputChange}
                           required
                           variant="outlined"
-                          helperText="Unique identifier (e.g., Main, Br1)"
+                          inputProps={{ maxLength: 50 }}
+                          helperText="Unique identifier (max 50 characters)"
                         />
                       </Grid>
 
