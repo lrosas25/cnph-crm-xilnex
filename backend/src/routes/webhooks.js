@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { receiveSaleCompleted, getTransactions, getTransaction } = require('../controllers/webhooks');
+const { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction } = require('../controllers/webhooks');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -15,6 +15,7 @@ const webhookLimiter = rateLimit({
 });
 
 // Inbound webhook from Xilnex (no JWT auth – validated by HMAC signature instead)
+router.get('/sale-completed', saleCompletedHealth);
 router.post('/sale-completed', webhookLimiter, receiveSaleCompleted);
 
 // Query endpoints (require CRM login)

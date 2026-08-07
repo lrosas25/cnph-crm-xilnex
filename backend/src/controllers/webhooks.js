@@ -80,6 +80,20 @@ const mapPayload = (payload) => {
   };
 };
 
+// @desc    Health check for Xilnex webhook endpoint
+// @route   GET /api/webhooks/xilnex/sale-completed
+// @access  Public
+const saleCompletedHealth = asyncHandler(async (req, res) => {
+  const secret = process.env.XILNEX_WEBHOOK_SECRET;
+  res.status(200).json({
+    success: true,
+    endpoint: 'POST /api/webhooks/xilnex/sale-completed',
+    status: 'ready',
+    signatureVerification: secret ? 'enabled' : 'disabled (XILNEX_WEBHOOK_SECRET not set)',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // @desc    Receive Xilnex completed sale webhook
 // @route   POST /api/webhooks/xilnex/sale-completed
 // @access  Public (verified by HMAC signature)
@@ -216,4 +230,4 @@ const getTransaction = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: transaction });
 });
 
-module.exports = { receiveSaleCompleted, getTransactions, getTransaction };
+module.exports = { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction };
