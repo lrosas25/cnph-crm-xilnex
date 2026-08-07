@@ -11,7 +11,9 @@ const webhookLimiter = rateLimit({
   max: 120,            // Allow high-frequency POS traffic
   message: { error: 'Too many webhook requests, please try again later.' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  // Strip port from IP — X-Forwarded-For from IIS ARR includes port
+  keyGenerator: (req) => (req.ip || '').split(':')[0] || 'unknown'
 });
 
 // Inbound webhook from Xilnex (no JWT auth – validated by HMAC signature instead)

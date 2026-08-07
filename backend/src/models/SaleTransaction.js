@@ -21,6 +21,10 @@ const SaleTransactionSchema = new mongoose.Schema({
     type: String,
     index: true
   },
+  // Xilnex event name e.g. Xilnex.Sales.Complete
+  eventName: {
+    type: String
+  },
 
   // Outlet info
   outlet: {

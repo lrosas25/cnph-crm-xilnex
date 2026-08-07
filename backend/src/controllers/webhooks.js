@@ -5,8 +5,8 @@ const asyncHandler = require('../middleware/asyncHandler');
 
 const LOG = '[XILNEX WEBHOOK]';
 
-// Xilnex sends header: xilnex-webhook-signature = <raw HMAC-SHA256 hex>
-const verifySignature = (rawBody, signature) => {
+// Xilnex sends the raw secret as xilnex-webhook-signature (not HMAC of body)
+const verifySignature = (signature) => {
   const secret = process.env.XILNEX_WEBHOOK_SECRET;
   if (!secret) {
     console.warn(`${LOG} XILNEX_WEBHOOK_SECRET not set — skipping signature verification`);
@@ -18,23 +18,18 @@ const verifySignature = (rawBody, signature) => {
     return false;
   }
 
-  const expectedHash = crypto
-    .createHmac('sha256', secret)
-    .update(rawBody)
-    .digest('hex');
-
   console.log(`${LOG} Signature received : ${signature}`);
-  console.log(`${LOG} Signature expected : ${expectedHash}`);
+  console.log(`${LOG} Secret configured  : ${secret}`);
 
   try {
     const match = crypto.timingSafeEqual(
-      Buffer.from(signature, 'hex'),
-      Buffer.from(expectedHash, 'hex')
+      Buffer.from(signature),
+      Buffer.from(secret)
     );
     console.log(`${LOG} Signature match: ${match}`);
     return match;
   } catch {
-    console.error(`${LOG} Signature comparison failed — likely wrong length or encoding`);
+    console.error(`${LOG} Signature comparison failed — length mismatch between received and configured secret`);
     return false;
   }
 };
@@ -57,40 +52,39 @@ const resolveCrmCustomer = async (xilnexClientId, email, phone) => {
   }
 };
 
-/**
- * Map a raw Xilnex webhook payload to our SaleTransaction schema.
- * Adjust field paths here to match whatever Xilnex actually sends.
- */
+// Map the real Xilnex envelope { EventName, Data: { sale } } to SaleTransaction schema
 const mapPayload = (payload) => {
-  const tx = payload.transaction || payload.sale || payload;
+  const sale = payload.Data?.sale || payload.Data?.sales || payload;
+  const client = sale.client || {};
+  const firstPayment = (sale.collection || [])[0] || {};
 
   return {
-    xilnexTransactionId: tx.id || tx.transactionId || tx.transaction_id,
-    xilnexReceiptNo: tx.receiptNo || tx.receipt_no || tx.receiptNumber,
-    outlet: tx.outletName || tx.outlet_name || tx.outlet,
-    outletCode: tx.outletCode || tx.outlet_code,
-    xilnexClientId: tx.clientId || tx.client_id || tx.customerId,
-    customerName: tx.clientName || tx.client_name || tx.customerName,
-    customerEmail: tx.clientEmail || tx.client_email || tx.customerEmail,
-    customerPhone: tx.clientMobile || tx.client_mobile || tx.customerPhone,
-    transactionDate: tx.transactionDate || tx.transaction_date || tx.createdAt || new Date(),
-    items: (tx.items || tx.saleItems || []).map((item) => ({
-      itemCode: item.itemCode || item.item_code || item.code,
-      itemName: item.itemName || item.item_name || item.name,
-      quantity: item.quantity || item.qty,
-      unitPrice: item.unitPrice || item.unit_price || item.price,
-      discount: item.discount || 0,
-      totalPrice: item.totalPrice || item.total_price || item.total
+    xilnexTransactionId: String(sale.id),
+    xilnexReceiptNo: sale.salesOrderNo || sale.orderNo,
+    outlet: sale.outlet,
+    outletCode: sale.outletId,
+    xilnexClientId: sale.clientId ? String(sale.clientId) : null,
+    customerName: sale.clientName || client.name || client.recipientName,
+    customerEmail: sale.customerEmail || client.clientEmail,
+    customerPhone: sale.recipientContact || client.recipientContact || client.clientContactNo,
+    transactionDate: sale.dateTime || payload.EventTime || new Date(),
+    items: (sale.items || []).map((item) => ({
+      itemCode: item.itemCode,
+      itemName: item.itemName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      discount: item.discountAmount || 0,
+      totalPrice: item.subtotal
     })),
-    subtotal: tx.subtotal || tx.subTotal || tx.sub_total,
-    discountTotal: tx.discountTotal || tx.discount_total || tx.discount || 0,
-    taxTotal: tx.taxTotal || tx.tax_total || tx.tax || 0,
-    grandTotal: tx.grandTotal || tx.grand_total || tx.total || tx.amount,
-    currency: tx.currency || 'MYR',
-    paymentMethod: tx.paymentMethod || tx.payment_method || tx.paymentType,
+    subtotal: sale.netAmount,
+    discountTotal: sale.billDiscountAmount || sale.totalBillDiscountAmount || 0,
+    taxTotal: sale.gstTaxAmount || 0,
+    grandTotal: sale.grandTotal,
+    currency: sale.currencyCode || 'MYR',
+    paymentMethod: firstPayment.cardType || firstPayment.method,
     paymentStatus: 'completed',
-    staffId: tx.staffId || tx.staff_id || tx.cashierId,
-    staffName: tx.staffName || tx.staff_name || tx.cashierName
+    staffId: sale.cashier,
+    staffName: sale.cashier
   };
 };
 
@@ -120,7 +114,7 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
 
   const signature = req.headers['xilnex-webhook-signature'];
 
-  if (!verifySignature(req.rawBody, signature)) {
+  if (!verifySignature(signature)) {
     console.error(`${LOG} ❌ Signature verification failed — returning 401`);
     return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
   }
@@ -134,13 +128,14 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
   const results = [];
 
   for (const [i, event] of events.entries()) {
-    const eventType = event.event || event.type || event.eventType;
+    // Xilnex event envelope uses PascalCase: EventName
+    const eventType = event.EventName || event.event || event.type || event.eventType;
     console.log(`${LOG} [${i}] eventType: ${eventType ?? '(none)'}`);
 
-    // Match Xilnex Event Hub names: "Complete Sales", "Complete Sales v2"
+    // Match Xilnex.Sales.Complete and Xilnex.Sales.CompleteV2 etc.
     const isSaleEvent =
       !eventType ||
-      /complete\s+sales/i.test(eventType);
+      /^Xilnex\.Sales\.Complete/i.test(eventType);
 
     if (!isSaleEvent) {
       console.warn(`${LOG} [${i}] Skipped — unhandled event type: ${eventType}`);
@@ -173,6 +168,7 @@ const receiveSaleCompleted = asyncHandler(async (req, res) => {
         { xilnexTransactionId: mapped.xilnexTransactionId },
         {
           ...mapped,
+          eventName: eventType,
           crmCustomerId: crmCustomer?._id || null,
           rawPayload: event,
           processed: true,
