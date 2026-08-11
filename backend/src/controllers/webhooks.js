@@ -239,4 +239,52 @@ const getTransaction = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: transaction });
 });
 
-module.exports = { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction };
+
+// @desc    Hourly sales report — quantity per item for a given outlet, date & hour range
+// @route   GET /api/webhooks/xilnex/report/hourly-sales
+// @access  Private
+const getHourlySalesReport = asyncHandler(async (req, res) => {
+  const { outlet, from, to } = req.query;
+
+  if (!outlet || !from || !to) {
+    return res.status(400).json({ success: false, message: 'outlet, from, and to are required' });
+  }
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
+  if (isNaN(fromDate) || isNaN(toDate)) {
+    return res.status(400).json({ success: false, message: 'Invalid from or to date' });
+  }
+
+  const pipeline = [
+    {
+      $match: {
+        outlet,
+        transactionDate: { $gte: fromDate, $lte: toDate }
+      }
+    },
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: { itemCode: '$items.itemCode', itemName: '$items.itemName' },
+        totalQuantity: { $sum: '$items.quantity' }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        itemCode: '$_id.itemCode',
+        itemName: '$_id.itemName',
+        totalQuantity: 1
+      }
+    },
+    { $sort: { itemCode: 1 } }
+  ];
+
+  const rows = await SaleTransaction.aggregate(pipeline);
+
+  res.status(200).json({ success: true, count: rows.length, data: rows });
+});
+
+module.exports = { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction, getHourlySalesReport };

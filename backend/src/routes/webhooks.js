@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction } = require('../controllers/webhooks');
+const { receiveSaleCompleted, saleCompletedHealth, getTransactions, getTransaction, getHourlySalesReport } = require('../controllers/webhooks');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -23,5 +23,6 @@ router.post('/sale-completed', webhookLimiter, receiveSaleCompleted);
 // Query endpoints (require CRM login)
 router.get('/transactions', protect, getTransactions);
 router.get('/transactions/:id', protect, getTransaction);
+router.get('/report/hourly-sales', protect, getHourlySalesReport);
 
 module.exports = router;

@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import AddCustomer from './pages/AddCustomer';
 import OutletMaintenance from './pages/OutletMaintenance';
+import HourlySalesReport from './pages/HourlySalesReport';
 
 function App() {
   return (
@@ -41,6 +42,11 @@ function App() {
                 <Route path="/outlets" element={
                   <ProtectedRoute>
                     <OutletMaintenance />
+                  </ProtectedRoute>
+                } />
+                <Route path="/reports/hourly-sales" element={
+                  <ProtectedRoute>
+                    <HourlySalesReport />
                   </ProtectedRoute>
                 } />
               </Routes>

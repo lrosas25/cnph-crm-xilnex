@@ -30,6 +30,7 @@ import {
   AccountCircle as AccountIcon,
   Logout as LogoutIcon,
   Settings as SettingsIcon,
+  BarChart as BarChartIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,6 +43,7 @@ const menuItems = [
   { text: 'Customers', icon: <PeopleIcon />, path: '/customers' },
   { text: 'Add Customer', icon: <PersonAddIcon />, path: '/customers/add' },
   { text: 'Outlets', icon: <StorefrontIcon />, path: '/outlets' },
+  { text: 'Hourly Sales', icon: <BarChartIcon />, path: '/reports/hourly-sales' },
 ];
 
 function Layout({ children }) {

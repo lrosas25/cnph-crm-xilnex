@@ -86,4 +86,22 @@ export const authAPI = {
   },
 };
 
+// Outlet API functions
+export const outletAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/outlets', { params });
+    return response.data;
+  },
+};
+
+// Report API functions
+export const reportAPI = {
+  hourlySales: async ({ outlet, from, to }) => {
+    const response = await api.get('/webhooks/xilnex/report/hourly-sales', {
+      params: { outlet, from, to },
+    });
+    return response.data;
+  },
+};
+
 export default api;
