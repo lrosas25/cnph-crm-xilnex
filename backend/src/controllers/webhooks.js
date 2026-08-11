@@ -267,19 +267,24 @@ const getHourlySalesReport = asyncHandler(async (req, res) => {
     { $unwind: '$items' },
     {
       $group: {
-        _id: { itemCode: '$items.itemCode', itemName: '$items.itemName' },
+        _id: {
+          hour: { $hour: '$transactionDate' },
+          itemCode: '$items.itemCode',
+          itemName: '$items.itemName'
+        },
         totalQuantity: { $sum: '$items.quantity' }
       }
     },
     {
       $project: {
         _id: 0,
+        hour: '$_id.hour',
         itemCode: '$_id.itemCode',
         itemName: '$_id.itemName',
         totalQuantity: 1
       }
     },
-    { $sort: { itemCode: 1 } }
+    { $sort: { hour: 1, totalQuantity: -1 } }
   ];
 
   const rows = await SaleTransaction.aggregate(pipeline);

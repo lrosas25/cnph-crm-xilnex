@@ -19,14 +19,10 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Slider,
 } from '@mui/material';
 import { BarChart as BarChartIcon, Search as SearchIcon } from '@mui/icons-material';
 import { reportAPI, outletAPI } from '../services/api';
-
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
-  value: i,
-  label: `${String(i).padStart(2, '0')}:00`,
-}));
 
 const OUTLET_STORAGE_KEY = 'hrly_report_outlet';
 
@@ -60,16 +56,9 @@ export default function HourlySalesReport() {
     else localStorage.removeItem(OUTLET_STORAGE_KEY);
   };
 
-  const handleHourFromChange = (e) => {
-    const val = Number(e.target.value);
-    setHourFrom(val);
-    if (val > hourTo) setHourTo(val);
-  };
-
-  const handleHourToChange = (e) => {
-    const val = Number(e.target.value);
-    setHourTo(val);
-    if (val < hourFrom) setHourFrom(val);
+  const handleHourSliderChange = (_, newValue) => {
+    setHourFrom(newValue[0]);
+    setHourTo(newValue[1]);
   };
 
   const buildDateRange = useCallback(() => {
@@ -132,26 +121,21 @@ export default function HourlySalesReport() {
             />
           </Grid>
 
-          <Grid item xs={6} sm={2} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>From Hour</InputLabel>
-              <Select value={hourFrom} label="From Hour" onChange={handleHourFromChange}>
-                {HOUR_OPTIONS.map((h) => (
-                  <MenuItem key={h.value} value={h.value}>{h.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={6} sm={2} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>To Hour</InputLabel>
-              <Select value={hourTo} label="To Hour" onChange={handleHourToChange}>
-                {HOUR_OPTIONS.filter((h) => h.value >= hourFrom).map((h) => (
-                  <MenuItem key={h.value} value={h.value}>{h.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          <Grid item xs={12} sm={4} md={4}>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Hour range: <strong>{hourFrom}:00</strong> — <strong>{hourTo}:59</strong>
+            </Typography>
+            <Slider
+              value={[hourFrom, hourTo]}
+              onChange={handleHourSliderChange}
+              min={0}
+              max={23}
+              step={1}
+              valueLabelDisplay="auto"
+              valueLabelFormat={(v) => `${v}h`}
+              marks={[{ value: 0, label: '0' }, { value: 6, label: '6' }, { value: 12, label: '12' }, { value: 18, label: '18' }, { value: 23, label: '23' }]}
+              sx={{ mt: 1 }}
+            />
           </Grid>
 
           <Grid item xs={12} sm={2} md={2}>
@@ -190,27 +174,49 @@ export default function HourlySalesReport() {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
+                  <TableCell><strong>Hour</strong></TableCell>
+                  <TableCell align="right"><strong>Quantity</strong></TableCell>
                   <TableCell><strong>Item Code</strong></TableCell>
                   <TableCell><strong>Item Name</strong></TableCell>
-                  <TableCell align="right"><strong>Quantity</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                    <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                       No sales data for the selected criteria.
                     </TableCell>
                   </TableRow>
-                ) : (
-                  rows.map((row, idx) => (
-                    <TableRow key={idx} hover>
-                      <TableCell>{row.itemCode || '—'}</TableCell>
-                      <TableCell>{row.itemName || '—'}</TableCell>
-                      <TableCell align="right">{row.totalQuantity}</TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ) : (() => {
+                  // Build hour groups to compute rowSpan for the Hour cell
+                  const groups = [];
+                  rows.forEach((row) => {
+                    const last = groups[groups.length - 1];
+                    if (last && last.hour === row.hour) {
+                      last.items.push(row);
+                    } else {
+                      groups.push({ hour: row.hour, items: [row] });
+                    }
+                  });
+                  return groups.flatMap((group) =>
+                    group.items.map((row, i) => (
+                      <TableRow key={`${group.hour}-${i}`} hover>
+                        {i === 0 && (
+                          <TableCell
+                            rowSpan={group.items.length}
+                            align="center"
+                            sx={{ fontWeight: 'bold', verticalAlign: 'middle', borderRight: '1px solid', borderColor: 'divider' }}
+                          >
+                            {group.hour}
+                          </TableCell>
+                        )}
+                        <TableCell align="right">{row.totalQuantity}</TableCell>
+                        <TableCell>{row.itemCode || '—'}</TableCell>
+                        <TableCell>{row.itemName || '—'}</TableCell>
+                      </TableRow>
+                    ))
+                  );
+                })()}
               </TableBody>
             </Table>
           </TableContainer>
