@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -20,8 +20,15 @@ import {
   Alert,
   Chip,
   Slider,
+  Collapse,
+  IconButton,
 } from '@mui/material';
-import { BarChart as BarChartIcon, Search as SearchIcon } from '@mui/icons-material';
+import {
+  BarChart as BarChartIcon,
+  Search as SearchIcon,
+  KeyboardArrowDown as ExpandIcon,
+  KeyboardArrowUp as CollapseIcon,
+} from '@mui/icons-material';
 import { reportAPI, outletAPI } from '../services/api';
 
 const OUTLET_STORAGE_KEY = 'hrly_report_outlet';
@@ -39,6 +46,7 @@ export default function HourlySalesReport() {
   const [loadingOutlets, setLoadingOutlets] = useState(true);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
+  const [collapsedHours, setCollapsedHours] = useState(new Set());
 
   // Load outlets on mount
   useEffect(() => {
@@ -74,6 +82,7 @@ export default function HourlySalesReport() {
     setError('');
     setLoading(true);
     setSearched(true);
+    setCollapsedHours(new Set());
     try {
       const { from, to } = buildDateRange();
       const result = await reportAPI.hourlySales({ outlet, from, to });
@@ -87,6 +96,24 @@ export default function HourlySalesReport() {
   };
 
   const totalQty = rows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0);
+
+  const groups = useMemo(() => {
+    const g = [];
+    rows.forEach((row) => {
+      const last = g[g.length - 1];
+      if (last && last.hour === row.hour) last.items.push(row);
+      else g.push({ hour: row.hour, items: [row] });
+    });
+    return g;
+  }, [rows]);
+
+  const toggleHour = (hour) => {
+    setCollapsedHours((prev) => {
+      const next = new Set(prev);
+      next.has(hour) ? next.delete(hour) : next.add(hour);
+      return next;
+    });
+  };
 
   return (
     <Box>
@@ -173,6 +200,7 @@ export default function HourlySalesReport() {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
+                  <TableCell width={48} />
                   <TableCell><strong>Hour</strong></TableCell>
                   <TableCell align="right"><strong>Quantity</strong></TableCell>
                   <TableCell><strong>Item Code</strong></TableCell>
@@ -182,40 +210,48 @@ export default function HourlySalesReport() {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                       No sales data for the selected criteria.
                     </TableCell>
                   </TableRow>
-                ) : (() => {
-                  // Build hour groups to compute rowSpan for the Hour cell
-                  const groups = [];
-                  rows.forEach((row) => {
-                    const last = groups[groups.length - 1];
-                    if (last && last.hour === row.hour) {
-                      last.items.push(row);
-                    } else {
-                      groups.push({ hour: row.hour, items: [row] });
-                    }
-                  });
-                  return groups.flatMap((group) =>
-                    group.items.map((row, i) => (
-                      <TableRow key={`${group.hour}-${i}`} hover>
-                        {i === 0 && (
-                          <TableCell
-                            rowSpan={group.items.length}
-                            align="center"
-                            sx={{ fontWeight: 'bold', verticalAlign: 'middle', borderRight: '1px solid', borderColor: 'divider' }}
-                          >
-                            {group.hour}
-                          </TableCell>
-                        )}
-                        <TableCell align="right">{row.totalQuantity}</TableCell>
-                        <TableCell>{row.itemCode || '—'}</TableCell>
-                        <TableCell>{row.itemName || '—'}</TableCell>
+                ) : groups.map((group) => {
+                  const isOpen = !collapsedHours.has(group.hour);
+                  const groupQty = group.items.reduce((s, r) => s + (r.totalQuantity || 0), 0);
+                  return (
+                    <React.Fragment key={group.hour}>
+                      {/* Hour header row */}
+                      <TableRow
+                        onClick={() => toggleHour(group.hour)}
+                        sx={{ cursor: 'pointer', bgcolor: 'grey.100', '&:hover': { bgcolor: 'grey.200' } }}
+                      >
+                        <TableCell padding="checkbox">
+                          <IconButton size="small">
+                            {isOpen ? <CollapseIcon /> : <ExpandIcon />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{group.hour}:00</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>{groupQty}</TableCell>
+                        <TableCell colSpan={2} sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                          {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                        </TableCell>
                       </TableRow>
-                    ))
+                      {/* Collapsible item rows */}
+                      {group.items.map((row, i) => (
+                        <TableRow
+                          key={i}
+                          sx={{ display: isOpen ? 'table-row' : 'none' }}
+                          hover
+                        >
+                          <TableCell />
+                          <TableCell />
+                          <TableCell align="right">{row.totalQuantity}</TableCell>
+                          <TableCell>{row.itemCode || '—'}</TableCell>
+                          <TableCell>{row.itemName || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
                   );
-                })()}
+                })}
               </TableBody>
             </Table>
           </TableContainer>
