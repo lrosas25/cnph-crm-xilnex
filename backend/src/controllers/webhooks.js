@@ -268,7 +268,8 @@ const getHourlySalesReport = asyncHandler(async (req, res) => {
     {
       $group: {
         _id: {
-          hour: { $hour: '$transactionDate' },
+          // ReceiveTime is a string — convert to Date before extracting hour
+          hour: { $hour: { $toDate: '$rawPayload.ReceiveTime' } },
           itemCode: '$items.itemCode',
           itemName: '$items.itemName'
         },
