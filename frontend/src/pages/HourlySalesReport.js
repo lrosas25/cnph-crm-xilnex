@@ -97,7 +97,7 @@ export default function HourlySalesReport() {
 
       {/* Filters */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={2} alignItems="flex-end">
+        <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={5} md={4}>
             <FormControl fullWidth size="small" disabled={loadingOutlets}>
               <InputLabel>Outlet</InputLabel>
@@ -132,24 +132,23 @@ export default function HourlySalesReport() {
               Search
             </Button>
           </Grid>
-
-          <Grid item xs={12}>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-              Hour range: <strong>{hourFrom}:00</strong> — <strong>{hourTo}:59</strong>
-            </Typography>
-            <Slider
-              value={[hourFrom, hourTo]}
-              onChange={handleHourSliderChange}
-              min={0}
-              max={23}
-              step={1}
-              valueLabelDisplay="auto"
-              valueLabelFormat={(v) => `${v}h`}
-              marks={Array.from({ length: 24 }, (_, i) => ({ value: i, label: i % 3 === 0 ? String(i) : '' }))}
-              sx={{ mt: 1 }}
-            />
-          </Grid>
         </Grid>
+
+        <Box sx={{ mt: 3, px: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Hour range: <strong>{hourFrom}:00</strong> — <strong>{hourTo}:59</strong>
+          </Typography>
+          <Slider
+            value={[hourFrom, hourTo]}
+            onChange={handleHourSliderChange}
+            min={0}
+            max={23}
+            step={1}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(v) => `${v}h`}
+            marks={Array.from({ length: 24 }, (_, i) => ({ value: i, label: i % 3 === 0 ? String(i) : '' }))}
+          />
+        </Box>
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

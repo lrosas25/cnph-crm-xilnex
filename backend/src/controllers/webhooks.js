@@ -268,8 +268,8 @@ const getHourlySalesReport = asyncHandler(async (req, res) => {
     {
       $group: {
         _id: {
-          // ReceiveTime is a string — convert to Date before extracting hour
-          hour: { $hour: { $toDate: '$rawPayload.ReceiveTime' } },
+          // ReceiveTime is UTC — extract hour in UTC+8 (Malaysia)
+          hour: { $hour: { date: { $toDate: '$rawPayload.ReceiveTime' }, timezone: '+08:00' } },
           itemCode: '$items.itemCode',
           itemName: '$items.itemName'
         },
